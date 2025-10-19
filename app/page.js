@@ -9,9 +9,9 @@ const ProverbsVisualization = dynamic(() => import("./components/ProverbsVisuali
 
 export default function Page() {
   return (
-    <main style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 20, marginBottom: 8 }}>Decoding Egwu</h1>
-      <p style={{ marginBottom: 16, color: "#555" }}>
+    <main>
+      <h1 style={{ fontSize: 24, margin: 8 }}>Decoding Egwu</h1>
+      <p style={{ margin: 8, color: "#555" }}>
         This page shows relationships between Igbo proverbs containing egwu based
         on shared meanings and themes.
       </p>
