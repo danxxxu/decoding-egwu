@@ -10,6 +10,26 @@ export default function ProverbsVisualization() {
     width: typeof window !== "undefined" ? window.innerWidth : 800,
     height: typeof window !== "undefined" ? window.innerHeight : 600,
   });
+  const [selectedProverb, setSelectedProverb] = useState(null);
+
+  const resetVisualization = () => {
+    const svg = d3.select(svgRef.current);
+
+    // Reset node opacity
+    svg.selectAll("circle").transition().duration(200).attr("opacity", 1);
+
+    // Reset link opacity
+    svg
+      .selectAll("line")
+      .transition()
+      .duration(200)
+      .attr("stroke", "#ccc")
+      .attr("stroke-width", 1.5)
+      .attr("opacity", 0.2);
+
+    // Close modal
+    setSelectedProverb(null);
+  };
 
   useEffect(() => {
     d3.csv("/data/proverbs.csv").then((rows) => {
@@ -59,9 +79,21 @@ export default function ProverbsVisualization() {
       .select(svgRef.current)
       .attr("width", width)
       .attr("height", height)
-      .style("background", "#fafafa");
+      .style("background", "#000");
 
     svg.selectAll("*").remove();
+
+    // Create a group for all links and nodes
+    const graphGroup = svg.append("g");
+
+    const zoom = d3
+      .zoom()
+      .scaleExtent([0.5, 5]) // min and max zoom
+      .on("zoom", (event) => {
+        graphGroup.attr("transform", event.transform);
+      });
+
+    svg.call(zoom);
 
     // --- Cluster by first keyword ---
     const firstKeywords = Array.from(
@@ -75,28 +107,7 @@ export default function ProverbsVisualization() {
       };
     });
 
-    const color = d3.scaleOrdinal(d3.schemeTableau10).domain(firstKeywords);
-
-    const clusterCounts = {};
-    nodes.forEach((n) => {
-      const kw = n.keywords[0];
-      if (kw) clusterCounts[kw] = (clusterCounts[kw] || 0) + 1;
-    });
-
-    const maxCount = Math.max(...Object.values(clusterCounts), 1);
-    const radiusScale = d3.scaleSqrt().domain([0, maxCount]).range([50, 150]);
-
-    // --- Draw background bubbles ---
-    const bubbles = svg
-      .append("g")
-      .selectAll("circle")
-      .data(firstKeywords)
-      .join("circle")
-      .attr("cx", (kw) => clusterCenters[kw].x)
-      .attr("cy", (kw) => clusterCenters[kw].y)
-      .attr("r", (kw) => radiusScale(clusterCounts[kw] || 1))
-      .attr("fill", (kw) => color(kw))
-      .attr("opacity", 0.2);
+    const color = d3.scaleOrdinal(d3.schemeSet3).domain(firstKeywords);
 
     // --- Force simulation ---
     const simulation = d3
@@ -128,24 +139,27 @@ export default function ProverbsVisualization() {
         });
       });
 
-    const link = svg
+    const link = graphGroup
       .append("g")
       .attr("stroke", "#ccc")
       .attr("stroke-width", 1.5)
       .selectAll("line")
       .data(edges)
-      .join("line");
+      .join("line")
+      .attr("opacity", 0.2);
 
-    const node = svg
+    const node = graphGroup
       .append("g")
-      .selectAll("text")
+      .selectAll("circle")
       .data(nodes)
-      .join("text")
-      .text((d) => d.proverb)
-      .attr("font-size", 12)
-      .attr("font-weight", "bold")
-      .attr("text-anchor", "middle")
-      .attr("fill", "#000")
+      .join("circle")
+      .attr("r", 6)
+      .attr("fill", (d) => color(d.keywords[0]))
+      .attr("stroke", (d) => color(d.keywords[0]))
+      .attr("stroke-width", 1)
+      .attr("opacity", 0.9)
+      .attr("filter", "url(#glow)")
+      .style("cursor", "pointer")
       .call(
         d3
           .drag()
@@ -153,6 +167,28 @@ export default function ProverbsVisualization() {
           .on("drag", dragged)
           .on("end", dragEnded)
       );
+
+    // --- Define glow filter ---
+    const defs = svg.append("defs");
+    const filter = defs
+      .append("filter")
+      .attr("id", "glow")
+      .attr("x", "-50%")
+      .attr("y", "-50%")
+      .attr("width", "200%")
+      .attr("height", "200%");
+
+    filter
+      .append("feGaussianBlur")
+      .attr("stdDeviation", "5")
+      .attr("result", "blur");
+
+    filter
+      .append("feMerge")
+      .selectAll("feMergeNode")
+      .data(["blur", "SourceGraphic"])
+      .join("feMergeNode")
+      .attr("in", (d) => d);
 
     const tooltip = d3
       .select("body")
@@ -166,16 +202,18 @@ export default function ProverbsVisualization() {
       .style("font-size", "12px")
       .style("color", "#111")
       .style("line-height", "1.4")
-      .style("box-shadow", "0 2px 4px rgba(0,0,0,0.15)");
+      .style("box-shadow", "0 2px 4px rgba(0,0,0,0.15)")
+      .style("max-width", "400px") // or whatever width you prefer
+      .style("word-wrap", "break-word"); // ensures long text wraps
 
     node
       .on("mouseover", (event, d) => {
         tooltip
           .style("opacity", 1)
           .html(
-            `<em>${d.interpretation}</em><br/><small>${d.keywords.join(
-              ", "
-            )}</small>`
+            `<strong>${d.proverb}</strong><br/><em>${
+              d.interpretation
+            }</em><br/><small>${d.keywords.join(", ")}</small>`
           );
       })
       .on("mousemove", (event) => {
@@ -188,6 +226,8 @@ export default function ProverbsVisualization() {
     // --- Click highlight ---
     node.on("click", (event, d) => {
       event.stopPropagation();
+      setSelectedProverb(d); // show modal
+
       const relatedIds = new Set(
         edges
           .filter((e) => e.source.id === d.id || e.target.id === d.id)
@@ -198,26 +238,16 @@ export default function ProverbsVisualization() {
       node
         .transition()
         .duration(200)
-        .attr("opacity", (n) => (relatedIds.has(n.id) ? 1 : 0.1));
+        .attr("opacity", (n) => (relatedIds.has(n.id) ? 1 : 0.5));
       link
         .transition()
         .duration(200)
-        .attr("stroke", (l) =>
-          l.source.id === d.id || l.target.id === d.id ? "#555" : "#ddd"
-        )
-        .attr("stroke-width", (l) =>
-          l.source.id === d.id || l.target.id === d.id ? 2 : 1
+        .attr("opacity", (l) =>
+          l.source.id === d.id || l.target.id === d.id ? 1 : 0.2
         );
     });
 
-    svg.on("click", () => {
-      node.transition().duration(200).attr("opacity", 1);
-      link
-        .transition()
-        .duration(200)
-        .attr("stroke", "#ccc")
-        .attr("stroke-width", 1.5);
-    });
+    svg.on("click", resetVisualization);
 
     // --- Animate bubbles based on cluster node positions ---
     simulation.on("tick", () => {
@@ -227,29 +257,7 @@ export default function ProverbsVisualization() {
         .attr("x2", (d) => d.target.x)
         .attr("y2", (d) => d.target.y);
 
-      node.attr("x", (d) => d.x).attr("y", (d) => d.y);
-
-      // Update cluster bubbles to fit nodes
-      firstKeywords.forEach((kw, i) => {
-        const members = nodes.filter((n) => n.keywords[0] === kw);
-        if (members.length === 0) return;
-
-        // Center bubble on average position of nodes
-        const avgX = d3.mean(members, (n) => n.x);
-        const avgY = d3.mean(members, (n) => n.y);
-
-        // Radius based on max distance from center
-        const maxDist = Math.max(
-          ...members.map((n) => Math.hypot(n.x - avgX, n.y - avgY))
-        );
-        const r = Math.max(maxDist + 40, 50); // min radius 50
-
-        bubbles
-          .filter((b) => b === kw)
-          .attr("cx", avgX)
-          .attr("cy", avgY)
-          .attr("r", r);
-      });
+      node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
     });
 
     // --- Resize ---
@@ -287,5 +295,58 @@ export default function ProverbsVisualization() {
     }
   }, [data, dimensions.width, dimensions.height]);
 
-  return <svg ref={svgRef}></svg>;
+  return (
+    <>
+      {/* D3 Visualization */}
+      <svg ref={svgRef}></svg>
+
+      {/* Side Panel Modal */}
+      {selectedProverb && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            right: 0,
+            width: "300px",
+            height: "100%",
+            backgroundColor: "#111",
+            color: "#fff",
+            padding: "20px",
+            boxShadow: "-2px 0 10px rgba(0,0,0,0.5)",
+            zIndex: 1000,
+            overflowY: "auto",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>{selectedProverb.proverb}</h2>
+          <br />
+          <p>
+            <strong>Interpretation:</strong> {selectedProverb.interpretation}
+          </p>
+          <br />
+          {selectedProverb.keywords.length > 0 && (
+            <p>
+              <strong>Keywords:</strong> {selectedProverb.keywords.join(", ")}
+            </p>
+          )}
+          <button
+            onClick={resetVisualization}
+            style={{
+              position: "absolute",
+              top: "10px",
+              right: "10px",
+              background: "transparent",
+              color: "#fff",
+              border: "none",
+              fontSize: "24px",
+              cursor: "pointer",
+              lineHeight: "1",
+            }}
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
