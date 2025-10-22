@@ -99,15 +99,36 @@ export default function ProverbsVisualization() {
     const firstKeywords = Array.from(
       new Set(nodes.map((n) => n.keywords[0]).filter(Boolean))
     );
+
+    // --- Grid-based cluster positioning ---
+    const numClusters = firstKeywords.length;
+    const numCols = Math.ceil(Math.sqrt(numClusters)); // square-ish grid
+    const numRows = Math.ceil(numClusters / numCols);
+    const cellWidth = width / (numCols + 1);
+    const cellHeight = height / (numRows + 1);
+
     const clusterCenters = {};
     firstKeywords.forEach((kw, i) => {
+      const col = i % numCols;
+      const row = Math.floor(i / numCols);
       clusterCenters[kw] = {
-        x: (i + 1) * (width / (firstKeywords.length + 1)),
-        y: height / 2,
+        x: (col + 1) * cellWidth,
+        y: (row + 1) * cellHeight,
       };
     });
 
     const color = d3.scaleOrdinal(d3.schemeSet3).domain(firstKeywords);
+
+    const clusterLabels = graphGroup
+      .append("g")
+      .selectAll("text")
+      .data(firstKeywords)
+      .join("text")
+      .text((kw) => kw)
+      .attr("text-anchor", "middle")
+      .attr("font-weight", "bold")
+      .attr("fill", (kw) => color(kw))
+      .attr("opacity", 0.6);
 
     // --- Force simulation ---
     const simulation = d3
@@ -121,7 +142,7 @@ export default function ProverbsVisualization() {
       )
       .force("charge", d3.forceManyBody().strength(-300))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(100))
+      .force("collision", d3.forceCollide().radius(40))
       .force("bounding", () => {
         nodes.forEach((d) => {
           const padding = 50; // space from edges
@@ -133,8 +154,8 @@ export default function ProverbsVisualization() {
         nodes.forEach((d) => {
           const cluster = clusterCenters[d.keywords[0]];
           if (cluster) {
-            d.vx += (cluster.x - d.x) * 0.15 * alpha;
-            d.vy += (cluster.y - d.y) * 0.15 * alpha;
+            d.vx += (cluster.x - d.x) * 0.4 * alpha;
+            d.vy += (cluster.y - d.y) * 0.4 * alpha;
           }
         });
       });
@@ -258,6 +279,37 @@ export default function ProverbsVisualization() {
         .attr("y2", (d) => d.target.y);
 
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+
+      firstKeywords.forEach((kw) => {
+        const members = nodes.filter((n) => n.keywords[0] === kw);
+        if (members.length === 0) return;
+
+        // Compute cluster center
+        const avgX = d3.mean(members, (n) => n.x);
+        const avgY = d3.mean(members, (n) => n.y);
+
+        // Compute cluster radius with some padding
+        const maxDist = Math.max(
+          ...members.map((n) => Math.hypot(n.x - avgX, n.y - avgY))
+        );
+        const paddedRadius = maxDist + 20; // extra 20px padding
+
+        // Font size scaled based on cluster radius, generally bigger
+        const fontSize = d3
+          .scalePow()
+          .exponent(2) // >1 for exponential growth
+          .domain([0, 200])
+          .range([18, 40])(paddedRadius);
+
+        // Offset label above cluster center
+        const labelYOffset = paddedRadius * 0.5; // move label slightly above
+
+        clusterLabels
+          .filter((d) => d === kw)
+          .attr("x", avgX)
+          .attr("y", avgY - labelYOffset)
+          .attr("font-size", fontSize);
+      });
     });
 
     // --- Resize ---
@@ -265,6 +317,12 @@ export default function ProverbsVisualization() {
       const newWidth = window.innerWidth;
       const newHeight = window.innerHeight;
       svg.attr("width", newWidth).attr("height", newHeight);
+      firstKeywords.forEach((kw) => {
+        clusterLabels
+          .filter((d) => d === kw)
+          .attr("x", clusterCenters[kw].x)
+          .attr("y", clusterCenters[kw].y - 60);
+      });
       simulation
         .force("center", d3.forceCenter(newWidth / 2, newHeight / 2))
         .alpha(0.3)
