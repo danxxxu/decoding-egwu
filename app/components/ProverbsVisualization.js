@@ -35,34 +35,43 @@ export default function ProverbsVisualization() {
     d3.csv("/data/proverbs.csv").then((rows) => {
       if (!rows.length) return;
 
-      const allColumns = Object.keys(rows[0]);
-      const metaColumns = ["id", "proverb", "interpretation"];
-      const keywordColumns = allColumns.filter(
-        (col) => !metaColumns.includes(col.toLowerCase())
+      // Skip the 2nd row (explanation row)
+      const cleaned = rows.filter(
+        (row, i) => i > 1 && row.id !== "" && row.id !== undefined
       );
 
-      const nodes = rows.map((row, i) => {
-        const keywords = keywordColumns
+      const nodes = cleaned.map((row, i) => {
+        const keywords = ["keyword1", "keyword2", "keyword3"]
           .map((col) => (row[col] || "").trim())
           .filter((k) => k.length > 0);
 
         return {
           id: row.id || i.toString(),
           proverb: row.proverb || "",
+          translation: row.translation || "",
+          keyword1: row.keyword1 || "",
+          keyword2: row.keyword2 || "",
+          keyword3: row.keyword3 || "",
           interpretation: row.interpretation || "",
+          source: row.source || "",
+          reference: row.reference || "",
+          media: row.media || "",
+          comments: row.comments || "",
+          relations: row["relations between proverbs"] || "",
           keywords,
         };
       });
 
       const edges = [];
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const kw1 = nodes[i].keywords[1];
-          const kw2 = nodes[j].keywords[1];
-          if (kw1 && kw2 && kw1 === kw2)
-            edges.push({ source: nodes[i].id, target: nodes[j].id });
-        }
-      }
+      // connect nodes based on the second keyword
+      // for (let i = 0; i < nodes.length; i++) {
+      //   for (let j = i + 1; j < nodes.length; j++) {
+      //     const kw1 = nodes[i].keywords[1];
+      //     const kw2 = nodes[j].keywords[1];
+      //     if (kw1 && kw2 && kw1 === kw2)
+      //       edges.push({ source: nodes[i].id, target: nodes[j].id });
+      //   }
+      // }
 
       setData({ nodes, edges });
     });
@@ -133,13 +142,13 @@ export default function ProverbsVisualization() {
     // --- Force simulation ---
     const simulation = d3
       .forceSimulation(nodes)
-      .force(
-        "link",
-        d3
-          .forceLink(edges)
-          .id((d) => d.id)
-          .distance(150)
-      )
+      // .force(
+      //   "link",
+      //   d3
+      //     .forceLink(edges)
+      //     .id((d) => d.id)
+      //     .distance(150)
+      // )
       .force("charge", d3.forceManyBody().strength(-300))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collision", d3.forceCollide().radius(40))
@@ -233,7 +242,7 @@ export default function ProverbsVisualization() {
           .style("opacity", 1)
           .html(
             `<strong>${d.proverb}</strong><br/><em>${
-              d.interpretation
+              d.translation
             }</em><br/><small>${d.keywords.join(", ")}</small>`
           );
       })
@@ -365,7 +374,7 @@ export default function ProverbsVisualization() {
             position: "fixed",
             top: 0,
             right: 0,
-            width: "300px",
+            width: "350px",
             height: "100%",
             backgroundColor: "#111",
             color: "#fff",
@@ -375,17 +384,7 @@ export default function ProverbsVisualization() {
             overflowY: "auto",
           }}
         >
-          <h2 style={{ marginTop: 0 }}>{selectedProverb.proverb}</h2>
-          <br />
-          <p>
-            <strong>Interpretation:</strong> {selectedProverb.interpretation}
-          </p>
-          <br />
-          {selectedProverb.keywords.length > 0 && (
-            <p>
-              <strong>Keywords:</strong> {selectedProverb.keywords.join(", ")}
-            </p>
-          )}
+          {/* Close Button */}
           <button
             onClick={resetVisualization}
             style={{
@@ -403,6 +402,53 @@ export default function ProverbsVisualization() {
           >
             &times;
           </button>
+
+          {/* Title */}
+          <h2 style={{ marginTop: 0 }}>{selectedProverb.proverb}</h2>
+
+          <br />
+
+          {/* AUTO-GENERATED FIELDS */}
+          {Object.entries(selectedProverb).map(([key, value]) => {
+            // Skip force-layout fields
+            if (
+              [
+                "id",
+                "proverb",
+                "x",
+                "y",
+                "vx",
+                "vy",
+                "fx",
+                "fy",
+                "index",
+              ].includes(key)
+            )
+              return null;
+
+            // Skip keyword array (optional, already shown above)
+            if (key === "keywords") return null;
+
+            // Skip proverb itself (used as title)
+            // if (key === "proverb") return null;
+
+            // do not display empty fields && change html below into {value}
+            // if (!value || value.trim() === "") return null;
+
+            const displayValue = value ? value : "—";
+
+            // Format label (capitalize words, remove underscores)
+            const label = key
+              .replace(/_/g, " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase());
+
+            return (
+              <div key={key} style={{ marginBottom: "12px" }}>
+                <strong>{label}:</strong>
+                <p style={{ margin: "4px 0 0 0" }}>{displayValue}</p>
+              </div>
+            );
+          })}
         </div>
       )}
     </>
