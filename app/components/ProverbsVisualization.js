@@ -11,13 +11,26 @@ export default function ProverbsVisualization() {
     height: typeof window !== "undefined" ? window.innerHeight : 600,
   });
   const [selectedProverb, setSelectedProverb] = useState(null);
+  const [showContribute, setShowContribute] = useState(false); // New state
+  const [newProverb, setNewProverb] = useState({
+    proverb: "",
+    translation: "",
+    keyword1: "",
+    keyword2: "",
+    keyword3: "",
+    interpretation: "",
+    source: "",
+    reference: "",
+    media: "",
+    comments: "",
+  });
+
+  const panelWidth = selectedProverb ? 350 : 0;
 
   const resetVisualization = () => {
     const svg = d3.select(svgRef.current);
-
     // Reset node opacity
     svg.selectAll("circle").transition().duration(200).attr("opacity", 1);
-
     // Reset link opacity
     svg
       .selectAll("line")
@@ -26,9 +39,39 @@ export default function ProverbsVisualization() {
       .attr("stroke", "#ccc")
       .attr("stroke-width", 1.5)
       .attr("opacity", 0.2);
-
     // Close modal
     setSelectedProverb(null);
+  };
+
+  // --- Handle submitting a new proverb ---
+  const handleSubmitProverb = (e) => {
+    e.preventDefault();
+    const id = data?.nodes.length
+      ? (parseInt(data.nodes[data.nodes.length - 1].id) + 1).toString()
+      : "0";
+    const keywords = [
+      newProverb.keyword1,
+      newProverb.keyword2,
+      newProverb.keyword3,
+    ].filter(Boolean);
+    const newNode = { id, keywords, ...newProverb };
+    setData({
+      nodes: [...data.nodes, newNode],
+      edges: [...data.edges],
+    });
+    setShowContribute(false);
+    setNewProverb({
+      proverb: "",
+      translation: "",
+      keyword1: "",
+      keyword2: "",
+      keyword3: "",
+      interpretation: "",
+      source: "",
+      reference: "",
+      media: "",
+      comments: "",
+    });
   };
 
   useEffect(() => {
@@ -187,7 +230,7 @@ export default function ProverbsVisualization() {
       .attr("fill", (d) => color(d.keywords[0]))
       .attr("stroke", (d) => color(d.keywords[0]))
       .attr("stroke-width", 1)
-      .attr("opacity", 0.9)
+      .attr("opacity", 1)
       .attr("filter", "url(#glow)")
       .style("cursor", "pointer")
       .call(
@@ -268,7 +311,7 @@ export default function ProverbsVisualization() {
       node
         .transition()
         .duration(200)
-        .attr("opacity", (n) => (relatedIds.has(n.id) ? 1 : 0.5));
+        .attr("opacity", (n) => (relatedIds.has(n.id) ? 1 : 0.3));
       link
         .transition()
         .duration(200)
@@ -323,7 +366,7 @@ export default function ProverbsVisualization() {
 
     // --- Resize ---
     const handleResize = () => {
-      const newWidth = window.innerWidth;
+      const newWidth = window.innerWidth - panelWidth;
       const newHeight = window.innerHeight;
       svg.attr("width", newWidth).attr("height", newHeight);
       firstKeywords.forEach((kw) => {
@@ -363,9 +406,40 @@ export default function ProverbsVisualization() {
   }, [data, dimensions.width, dimensions.height]);
 
   return (
-    <>
+    <div
+      style={{
+        display: "flex",
+        width: "100vw",
+        height: "100vh",
+        position: "relative",
+      }}
+    >
       {/* D3 Visualization */}
-      <svg ref={svgRef}></svg>
+      <div style={{ flex: 1, position: "relative" }}>
+        <svg ref={svgRef} style={{ width: "100%", height: "100%" }}></svg>
+
+        {/* Contribute Button */}
+        <button
+          onClick={() => setShowContribute(true)}
+          style={{
+            position: "fixed",
+            bottom: 40,
+            left: 50,
+            padding: "10px 20px",
+            backgroundColor: "#007bff",
+            color: "#fff",
+            border: "none",
+            borderRadius: 5,
+            cursor: "pointer",
+            zIndex: 1000,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+            fontWeight: "bold",
+            fontSize: "16px",
+          }}
+        >
+          + Contribute
+        </button>
+      </div>
 
       {/* Side Panel Modal */}
       {selectedProverb && (
@@ -374,7 +448,7 @@ export default function ProverbsVisualization() {
             position: "fixed",
             top: 0,
             right: 0,
-            width: "350px",
+            width: panelWidth,
             height: "100%",
             backgroundColor: "#111",
             color: "#fff",
@@ -451,6 +525,81 @@ export default function ProverbsVisualization() {
           })}
         </div>
       )}
-    </>
+      {/* Contribute Modal */}
+      {showContribute && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: 350,
+            height: "100%",
+            backgroundColor: "#222",
+            color: "#fff",
+            padding: 20,
+            borderRadius: 8,
+            boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+            zIndex: 2000,
+          }}
+        >
+          <button
+            onClick={() => setShowContribute(false)}
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              background: "transparent",
+              color: "#fff",
+              border: "none",
+              fontSize: 20,
+              cursor: "pointer",
+            }}
+          >
+            &times;
+          </button>
+
+          <h3>Contribute a Proverb</h3>
+          <marquee>not working right now</marquee>
+          <form onSubmit={handleSubmitProverb}>
+            {Object.keys(newProverb).map((field) => (
+              <div key={field} style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", marginBottom: 4 }}>
+                  {field
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (c) => c.toUpperCase())}
+                  :
+                </label>
+                <input
+                  type="text"
+                  value={newProverb[field]}
+                  onChange={(e) =>
+                    setNewProverb({ ...newProverb, [field]: e.target.value })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: 6,
+                    borderRadius: 4,
+                    border: "1px solid #ccc",
+                  }}
+                />
+              </div>
+            ))}
+            <button
+              type="submit"
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#28a745",
+                color: "#fff",
+                border: "none",
+                borderRadius: 5,
+                cursor: "pointer",
+              }}
+            >
+              Submit
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
   );
 }
