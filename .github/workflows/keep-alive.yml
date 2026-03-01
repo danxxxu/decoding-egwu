@@ -2,9 +2,8 @@ name: Neo4j Aura Keep-Alive
 
 on:
   schedule:
-    # This runs at 00:00 UTC every day
     - cron: '0 0 * * *'
-  workflow_dispatch: # Allows you to run it manually for testing
+  workflow_dispatch: 
 
 jobs:
   ping-db:
@@ -12,4 +11,5 @@ jobs:
     steps:
       - name: Ping Aura via Vercel API
         run: |
-          curl -I https://decoding-egwu.vercel.app/
+          # Point this exactly to your API file path
+          curl -f -L https://decoding-egwu.vercel.app/api/keep-alive
